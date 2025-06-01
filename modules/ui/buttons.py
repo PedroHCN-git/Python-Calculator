@@ -2,10 +2,12 @@ from PySide6.QtWidgets import QPushButton, QWidget, QGridLayout
 from modules.configs import MEDIUM_TEXT
 from modules.utils import isNumOrDot, isEmpty, isValidNum
 from PySide6.QtCore import Slot
+import math
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from display import Display
     from info import Info
+    from main_window import MainWindow
 
 
 class Button(QPushButton):
@@ -22,12 +24,16 @@ class Button(QPushButton):
 
 class ButtonsGrid(QGridLayout):
     def __init__(
-            self, display: 'Display', info: 'Info', *args, **kwargs
+            self, display: 'Display',
+            info: 'Info',
+            mainWindow: 'MainWindow',
+            *args, **kwargs
             ) -> None:
         super().__init__(*args, **kwargs)
         self.display = display
         self.info = info
         self._equation = ''
+        self._mainWindow = mainWindow
 
         self._gridMask = [
             ['C', '◀', '^', '/'],
@@ -70,7 +76,10 @@ class ButtonsGrid(QGridLayout):
         if text == 'C':
             self._connectButtonClicked(button, self._clear)
 
-        if text in '+-/*':
+        if text == '◀':
+            self._connectButtonClicked(button, self._backspace)
+
+        if text in '+-/*^':
             self._connectButtonClicked(
                 button,
                 self._makeSlot(self._operatorClicked, button)
@@ -101,12 +110,15 @@ class ButtonsGrid(QGridLayout):
         self.equation = ''
         self.display.clear()
 
+    def _backspace(self):
+        self.display.backspace()
+
     def _operatorClicked(self, button):
         buttonText = button.text()
         displayText = self.display.text()
 
         if not isValidNum(displayText) and self._left is None:
-            print('não existe valor para operar')
+            self._showError('não existe valor para operar')
             return
 
         if self._left is None:
@@ -121,29 +133,45 @@ class ButtonsGrid(QGridLayout):
         displayText = self.display.text()
 
         if not isValidNum(displayText):
-            print('sem nada a direita')
+            self._showError('sem nada a direita')
             return
 
         if self._rigth is None and self._left is not None:
             self._rigth = float(displayText)
         else:
-            print('não é possível operar com nada')
+            self._showError('não é possível operar com nada')
             return
 
         self.equation += f" {self._rigth}"
         self.display.clear()
-
         try:
-            result = eval(self.equation)
+            if '^' in self.equation and self._left is not None:
+                result = math.pow(self._rigth, self._left)
+            else:
+                result = eval(self.equation)
             self.display.setText(str(result))
-        except ZeroDivisionError:
-            self.equation = 'impossível divisão por zero!'
-            self._left = None
-            self._rigth = None
-            self._op = None
+        except (ZeroDivisionError, OverflowError) as e:
+            if e.__class__.__name__ == 'ZeroDivisionError':
+                self.equation = 'impossível divisão por zero!'
+                self._left = None
+                self._rigth = None
+                self._op = None
+            elif e.__class__.__name__ == 'OverflowError':
+                self.equation = 'error'
+                self._left = None
+                self._rigth = None
+                self._op = None
             return
 
         self._left = result
         self._rigth = None
         self._op = None
         self.equation = ''
+        if result == 'error':
+            self._left = None
+
+    def _showError(self, message):
+        msgBox = self._mainWindow.messageBox()
+        msgBox.setText(message)
+        msgBox.setIcon(msgBox.Icon.Critical)
+        msgBox.exec()

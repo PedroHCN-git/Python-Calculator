@@ -25,7 +25,7 @@ if __name__ == '__main__':
     display = Display()
     window.addWigetToVLayout(display)
 
-    buttonsGrid = ButtonsGrid(display, info)
+    buttonsGrid = ButtonsGrid(display, info, window)
     window.vLayout.addLayout(buttonsGrid)
 
     # janela principal
